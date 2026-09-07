@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Hall Capture</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Hall Capture">
+<meta name="theme-color" content="#003DA5">
+<style>
+  :root{
+    --blue:#003DA5;
+    --blue-lift:#1657C8;
+    --gold:#FFC72C;
+    --ink:#0E1116;
+    --panel:#181D25;
+    --panel-2:#212833;
+    --line:#2E3743;
+    --text:#F4F6F9;
+    --dim:#93A0B0;
+    --ok:#31C48D;
+    --warn:#F98080;
+    --pad: 14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
+    font-size:17px;
+    line-height:1.35;
+    display:flex;
+    flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overscroll-behavior:none;
+  }
+  button{font-family:inherit;color:inherit;border:0;background:none;font-size:inherit}
+  .hidden{display:none !important}
+
+  /* ---------- status strip ---------- */
+  #strip{
+    display:flex;align-items:stretch;gap:1px;
+    background:var(--line);
+    border-bottom:1px solid var(--line);
+    flex:0 0 auto;
+  }
+  #strip > *{background:var(--panel);padding:9px var(--pad);flex:1 1 auto;min-width:0}
+  #periodBox{flex:1 1 55%}
+  #periodName{font-size:15px;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #clockLine{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  #windowBox{flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;min-width:96px;text-align:center}
+  .w-10{color:var(--gold)}
+  .w-mid{color:var(--dim)}
+  .w-out{color:var(--dim)}
+
+  /* ---------- zone + sweep row ---------- */
+  #controls{display:flex;gap:1px;background:var(--line);flex:0 0 auto}
+  #zoneBtn,#sweepBtn{background:var(--panel);padding:11px var(--pad);flex:1 1 50%;text-align:left;font-size:14px}
+  #zoneBtn b,#sweepBtn b{display:block;font-size:11px;color:var(--dim);font-weight:600;margin-bottom:2px}
+  #sweepBtn{text-align:right}
+  #sweepBtn.on{background:var(--blue);}
+  #sweepBtn.on b{color:#BFD2F5}
+
+  /* ---------- hero ---------- */
+  #hero{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;padding:6px var(--pad) 0}
+  #idWrap{position:relative}
+  #idDisplay{
+    width:100%;
+    background:var(--panel);
+    border:2px solid var(--line);
+    border-radius:12px;
+    padding:14px 16px;
+    font-size:56px;
+    font-weight:700;
+    letter-spacing:6px;
+    font-variant-numeric:tabular-nums;
+    text-align:center;
+    min-height:92px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #idDisplay.empty{color:#3C4654;letter-spacing:2px;font-size:24px;font-weight:600}
+  #idDisplay.armed{border-color:var(--blue-lift)}
+  #wedge{position:absolute;inset:0;opacity:0;font-size:16px}
+  #flash{
+    margin:10px 0 0;min-height:26px;font-size:15px;font-weight:600;text-align:center;
+  }
+  #flash.ok{color:var(--ok)}
+  #flash.warn{color:var(--warn)}
+
+  /* ---------- keypad ---------- */
+  #pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  #pad button{
+    background:var(--panel-2);
+    border-radius:12px;
+    height:58px;
+    font-size:26px;
+    font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+  #pad button:active{background:var(--blue)}
+  #pad .fn{font-size:16px;font-weight:700;color:var(--dim)}
+  #logBtn{
+    margin-top:8px;width:100%;height:70px;border-radius:12px;
+    background:var(--blue);font-size:22px;font-weight:800;letter-spacing:.4px;
+  }
+  #logBtn:active{background:var(--blue-lift)}
+  #logBtn:disabled{background:var(--panel-2);color:#4A5563}
+
+  /* ---------- recent ---------- */
+  #recentWrap{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);padding:8px var(--pad) 10px;max-height:34vh;overflow:auto}
+  #recentHead{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--dim);margin-bottom:4px}
+  .rec{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #232B36;font-size:15px}
+  .rec:last-child{border-bottom:0}
+  .rec .rid{font-weight:700;font-variant-numeric:tabular-nums}
+  .rec .rmeta{color:var(--dim);font-size:12px;text-align:right}
+  .rec .undo{color:var(--warn);font-size:12px;font-weight:700;padding:6px 8px;margin-left:8px}
+
+  /* ---------- footer ---------- */
+  #foot{flex:0 0 auto;display:flex;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  #foot button{background:var(--panel);padding:12px 6px;flex:1;font-size:13px;font-weight:600;color:var(--dim)}
+  #foot button:active{color:var(--text)}
+
+  /* ---------- sheets ---------- */
+  .sheet{position:fixed;inset:0;background:var(--ink);z-index:20;display:flex;flex-direction:column}
+  .sheetHead{display:flex;justify-content:space-between;align-items:center;padding:12px var(--pad);border-bottom:1px solid var(--line)}
+  .sheetHead h2{margin:0;font-size:17px;font-weight:700}
+  .sheetHead button{color:var(--gold);font-weight:700}
+  .sheetBody{flex:1;overflow:auto;padding:var(--pad);padding-bottom:40px}
+  .sheetBody h3{font-size:13px;color:var(--dim);margin:18px 0 8px;font-weight:700}
+  .sheetBody h3:first-child{margin-top:0}
+  .zoneOpt{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px;margin-bottom:8px;font-size:17px}
+  .zoneOpt.sel{border-color:var(--gold);background:var(--panel-2)}
+  .zoneOpt.sel:after{content:"selected";float:right;font-size:12px;color:var(--gold);font-weight:700}
+  table.sched{width:100%;border-collapse:collapse;font-size:15px}
+  table.sched th{text-align:left;font-size:11px;color:var(--dim);padding:0 4px 4px;font-weight:600}
+  table.sched td{padding:3px 2px}
+  table.sched input{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:9px;font-size:15px;font-family:inherit;
+  }
+  table.sched input[type=time]{font-variant-numeric:tabular-nums}
+  .btnRow{display:flex;gap:8px;margin-top:14px}
+  .btnRow button{flex:1;padding:14px;border-radius:10px;background:var(--panel-2);font-weight:700;font-size:15px}
+  .btnRow button.primary{background:var(--blue)}
+  .note{font-size:13px;color:var(--dim);margin:10px 0 0}
+  .warnbar{background:#3A1D1D;color:#FFC9C9;font-size:13px;padding:9px var(--pad);text-align:center}
+  textarea#dump{width:100%;height:38vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  .stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+  .stat span:last-child{font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div id="storeWarn" class="warnbar hidden">
+  Storage is blocked here, so nothing will be saved. Download this file and open it in Safari or Chrome.
+</div>
+
+<div id="strip">
+  <div id="periodBox">
+    <div id="periodName">Loading</div>
+    <div id="clockLine">--:--</div>
+  </div>
+  <div id="windowBox" class="w-out">OFF</div>
+</div>
+
+<div id="controls">
+  <button id="zoneBtn"><b>Location</b><span id="zoneLabel">Main hall</span></button>
+  <button id="sweepBtn"><b>Sweep</b><span id="sweepLabel">Start sweep</span></button>
+</div>
+
+<div id="hero">
+  <div id="idWrap">
+    <div id="idDisplay" class="empty">Scan or key student ID</div>
+    <input id="wedge" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Scanner input">
+  </div>
+  <div id="flash"></div>
+  <div id="pad">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button class="fn" data-k="clear">Clear</button><button data-k="0">0</button><button class="fn" data-k="del">Back</button>
+  </div>
+  <button id="logBtn" disabled>Log</button>
+</div>
+
+<div id="recentWrap">
+  <div id="recentHead">
+    <span id="recentTitle">Recent</span>
+    <span id="todayCount">0 today</span>
+  </div>
+  <div id="recentList"></div>
+</div>
+
+<div id="foot">
+  <button id="exportBtn">Export</button>
+  <button id="statsBtn">Today</button>
+  <button id="setupBtn">Setup</button>
+</div>
+
+<!-- Zone sheet -->
+<div id="zoneSheet" class="sheet hidden">
+  <div class="sheetHead"><h2>Location</h2><button data-close="zoneSheet">Done</button></div>
+  <div class="sheetBody">
+    <p class="note" style="margin-top:0">This stays set until you change it, so a scan is still one tap.</p>
+    <div id="zoneList"></div>
+  </div>
+</div>
+
+<!-- Setup sheet -->
+<div id="setupSheet" class="sheet hidden">
+  <div class="sheetHead"><h2>Setup</h2><button data-close="setupSheet">Done</button></div>
+  <div class="sheetBody">
+    <h3>Bell schedule</h3>
+    <table class="sched">
+      <thead><tr><th style="width:38%">Period</th><th style="width:31%">Start</th><th style="width:31%">End</th></tr></thead>
+      <tbody id="schedBody"></tbody>
+    </table>
+    <div class="btnRow">
+      <button id="addRow">Add period</button>
+      <button id="saveSched" class="primary">Save schedule</button>
+    </div>
+    <p class="note">The tool stamps the period and the 10-10 window from the device clock. If a bell runs off schedule, the period name is still correct, so fix the schedule when it changes permanently.</p>
+
+    <h3>Locations</h3>
+    <textarea id="zoneEdit" style="width:100%;height:110px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:15px;font-family:inherit"></textarea>
+    <div class="btnRow"><button id="saveZones" class="primary">Save locations</button></div>
+    <p class="note">One per line. Keep the list under six so the tap stays fast.</p>
+
+    <h3>Data</h3>
+    <div class="stat"><span>Scans stored</span><span id="cntScans">0</span></div>
+    <div class="stat"><span>Sweeps stored</span><span id="cntSweeps">0</span></div>
+    <div class="stat"><span>Oldest record</span><span id="oldest">none</span></div>
+    <div class="btnRow"><button id="wipeBtn" style="color:var(--warn)">Clear all data</button></div>
+    <p class="note">Export first. Clearing cannot be undone.</p>
+  </div>
+</div>
+
+<!-- Export sheet -->
+<div id="exportSheet" class="sheet hidden">
+  <div class="sheetHead"><h2>Export</h2><button data-close="exportSheet">Done</button></div>
+  <div class="sheetBody">
+    <div class="btnRow" style="margin-top:0">
+      <button id="dlBtn" class="primary">Download CSV</button>
+      <button id="copyBtn">Copy CSV</button>
+    </div>
+    <p class="note">Two files download: scans and sweeps. Send both to Seth. Copy puts the scan file on the clipboard if downloads are blocked.</p>
+    <h3>Preview</h3>
+    <textarea id="dump" readonly></textarea>
+  </div>
+</div>
+
+<!-- Today sheet -->
+<div id="statsSheet" class="sheet hidden">
+  <div class="sheetHead"><h2>Today</h2><button data-close="statsSheet">Done</button></div>
+  <div class="sheetBody" id="statsBody"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- storage ---------------- */
+var mem = {};
+var storeOK = true;
+try { localStorage.setItem("hc.test","1"); localStorage.removeItem("hc.test"); }
+catch(e){ storeOK = false; document.getElementById("storeWarn").classList.remove("hidden"); }
+
+function put(k,v){ var s=JSON.stringify(v); if(storeOK){ try{ localStorage.setItem(k,s); return; }catch(e){ storeOK=false; document.getElementById("storeWarn").classList.remove("hidden"); } } mem[k]=s; }
+function get(k,d){ var s = storeOK ? localStorage.getItem(k) : mem[k]; if(s==null) s=mem[k]; if(s==null) return d; try{ return JSON.parse(s); }catch(e){ return d; } }
+
+var DEFAULT_SCHED = [
+  {n:"1st",s:"08:15",e:"09:05"},
+  {n:"2nd",s:"09:10",e:"10:00"},
+  {n:"3rd",s:"10:05",e:"10:55"},
+  {n:"4th",s:"11:00",e:"11:50"},
+  {n:"Lunch",s:"11:50",e:"12:25"},
+  {n:"5th",s:"12:30",e:"13:20"},
+  {n:"6th",s:"13:25",e:"14:15"},
+  {n:"7th",s:"14:20",e:"15:10"}
+];
+var DEFAULT_ZONES = ["Main hall","2nd floor","Restroom area","Commons","Gym hall","Outside room"];
+
+var sched  = get("hc.sched", DEFAULT_SCHED);
+var zones  = get("hc.zones", DEFAULT_ZONES);
+var zone   = get("hc.zone", zones[0]);
+var scans  = get("hc.scans", []);
+var sweeps = get("hc.sweeps", []);
+var sweep  = get("hc.sweep", null);
+
+/* ---------------- helpers ---------------- */
+function pad2(n){ return (n<10?"0":"")+n; }
+function toMin(hhmm){ var p=String(hhmm).split(":"); return (+p[0])*60 + (+p[1]); }
+function dstr(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+function tstr(d){ return pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds()); }
+function clock(d){ var h=d.getHours(), ap=h>=12?"PM":"AM"; h=h%12; if(h===0)h=12; return h+":"+pad2(d.getMinutes())+" "+ap; }
+
+function periodAt(d){
+  var m = d.getHours()*60 + d.getMinutes();
+  for(var i=0;i<sched.length;i++){
+    var s=toMin(sched[i].s), e=toMin(sched[i].e);
+    if(m>=s && m<e){
+      var into = m-s, left = e-m;
+      var win = into<10 ? "first10" : (left<=10 ? "last10" : "middle30");
+      return {name:sched[i].n, into:into, left:left, win:win, inClass:true};
+    }
+  }
+  return {name:"Outside class time", into:null, left:null, win:"outside", inClass:false};
+}
+
+var LABEL = {first10:"FIRST 10", last10:"LAST 10", middle30:"MIDDLE", outside:"OFF"};
+var CLS   = {first10:"w-10", last10:"w-10", middle30:"w-mid", outside:"w-out"};
+
+/* ---------------- clock strip ---------------- */
+var elPeriod=document.getElementById("periodName"), elClock=document.getElementById("clockLine"), elWin=document.getElementById("windowBox");
+function tick(){
+  var d=new Date(), p=periodAt(d);
+  elPeriod.textContent = p.inClass ? ("Period "+p.name).replace("Period Lunch","Lunch") : p.name;
+  elClock.textContent = clock(d) + (p.inClass ? "  ·  "+p.into+" min in, "+p.left+" left" : "");
+  elWin.textContent = LABEL[p.win];
+  elWin.className = CLS[p.win];
+}
+tick(); setInterval(tick, 5000);
+
+/* ---------------- entry ---------------- */
+var buf="", elId=document.getElementById("idDisplay"), elFlash=document.getElementById("flash"), elLog=document.getElementById("logBtn");
+function paint(){
+  if(buf===""){ elId.textContent="Scan or key student ID"; elId.className="empty"; elLog.disabled=true; }
+  else { elId.textContent=buf; elId.className="armed"; elLog.disabled=false; }
+}
+function key(k){
+  if(k==="clear") buf="";
+  else if(k==="del") buf=buf.slice(0,-1);
+  else if(buf.length<12) buf+=k;
+  if(typeof wedge !== "undefined" && wedge) wedge.value = buf;
+  elFlash.textContent=""; elFlash.className="";
+  paint();
+}
+document.getElementById("pad").addEventListener("click", function(ev){
+  var b=ev.target.closest("button"); if(!b) return;
+  key(b.getAttribute("data-k"));
+  if(navigator.vibrate) navigator.vibrate(8);
+});
+
+function flash(msg, kind){ elFlash.textContent=msg; elFlash.className=kind||""; }
+
+function commit(id){
+  id = String(id).replace(/\s+/g,"");
+  if(!id){ return; }
+  var d=new Date(), p=periodAt(d);
+  var last = scans.length ? scans[scans.length-1] : null;
+  if(last && last.id===id && (Date.now()-Date.parse(last.ts))<20000){
+    buf=""; if(wedge) wedge.value=""; paint();
+    flash("Already logged "+id+" a moment ago","warn"); return;
+  }
+  scans.push({
+    id:id, ts:d.toISOString(), date:dstr(d), time:tstr(d),
+    period:p.name, window:p.win, min_into_period:p.into,
+    location:zone, sweep_id: sweep ? sweep.id : ""
+  });
+  put("hc.scans", scans);
+  buf=""; if(wedge) wedge.value=""; paint();
+  flash("Logged "+id+"  ·  "+clock(d), "ok");
+  if(navigator.vibrate) navigator.vibrate([12,40,12]);
+  renderRecent();
+}
+elLog.addEventListener("click", function(){ commit(buf); });
+
+/* barcode wedge: keeps a hidden input focused so a Bluetooth scanner types straight in */
+var wedge=document.getElementById("wedge");
+function refocus(){ try{ wedge.focus({preventScroll:true}); }catch(e){} }
+refocus();
+function anySheetOpen(){ return !!document.querySelector(".sheet:not(.hidden)"); }
+document.addEventListener("click", function(ev){ if(anySheetOpen()) return; if(!ev.target.closest(".sheet")) setTimeout(refocus,0); });
+wedge.addEventListener("keydown", function(ev){
+  if(ev.key==="Enter"){ ev.preventDefault(); var v=wedge.value||buf; wedge.value=""; commit(v); return; }
+  if(/^[0-9]$/.test(ev.key)){ /* let it land in the wedge, mirror to display */ setTimeout(function(){ buf=wedge.value.replace(/\D/g,"").slice(0,12); paint(); },0); }
+});
+wedge.addEventListener("blur", function(){ if(anySheetOpen()) return; setTimeout(refocus, 300); });
+
+/* ---------------- sweep ---------------- */
+var sweepBtn=document.getElementById("sweepBtn"), sweepLabel=document.getElementById("sweepLabel");
+function paintSweep(){
+  if(sweep){ sweepBtn.classList.add("on"); sweepLabel.textContent="End sweep"; }
+  else { sweepBtn.classList.remove("on"); sweepLabel.textContent="Start sweep"; }
+}
+sweepBtn.addEventListener("click", function(){
+  var d=new Date(), p=periodAt(d);
+  if(sweep){
+    sweep.end_ts=d.toISOString(); sweep.end_time=tstr(d);
+    sweep.scan_count = scans.filter(function(s){ return s.sweep_id===sweep.id; }).length;
+    sweeps.push(sweep); sweep=null;
+    put("hc.sweeps",sweeps); put("hc.sweep",null);
+    flash("Sweep closed","ok");
+  } else {
+    sweep={ id:"S"+Date.now(), date:dstr(d), start_ts:d.toISOString(), start_time:tstr(d),
+            period:p.name, window:p.win, location:zone, end_ts:"", end_time:"", scan_count:0 };
+    put("hc.sweep",sweep);
+    flash("Sweep open. End it when you leave the hall.","ok");
+  }
+  paintSweep(); renderRecent();
+});
+paintSweep();
+
+/* ---------------- zone ---------------- */
+var zoneLabel=document.getElementById("zoneLabel");
+function paintZone(){ zoneLabel.textContent=zone; }
+function renderZones(){
+  var wrap=document.getElementById("zoneList"); wrap.innerHTML="";
+  zones.forEach(function(z){
+    var b=document.createElement("button");
+    b.className="zoneOpt"+(z===zone?" sel":""); b.textContent=z;
+    b.addEventListener("click", function(){ zone=z; put("hc.zone",z); paintZone(); renderZones(); close("zoneSheet"); });
+    wrap.appendChild(b);
+  });
+}
+paintZone();
+document.getElementById("zoneBtn").addEventListener("click", function(){ renderZones(); open("zoneSheet"); });
+
+/* ---------------- recent ---------------- */
+function renderRecent(){
+  var today=dstr(new Date());
+  var todays=scans.filter(function(s){ return s.date===today; });
+  document.getElementById("todayCount").textContent = todays.length+" today"+(sweep?"  ·  sweep open":"");
+  var list=document.getElementById("recentList"); list.innerHTML="";
+  var recent=scans.slice(-6).reverse();
+  if(!recent.length){ list.innerHTML='<div class="rec" style="color:#5A6674">Nothing logged yet.</div>'; return; }
+  recent.forEach(function(s,i){
+    var row=document.createElement("div"); row.className="rec";
+    var left=document.createElement("div"); left.className="rid"; left.textContent=s.id;
+    var right=document.createElement("div"); right.style.display="flex"; right.style.alignItems="center";
+    var meta=document.createElement("div"); meta.className="rmeta";
+    meta.innerHTML = s.time.slice(0,5)+"<br>"+(s.period)+" · "+LABEL[s.window].toLowerCase();
+    right.appendChild(meta);
+    if(i===0){
+      var u=document.createElement("button"); u.className="undo"; u.textContent="Undo";
+      u.addEventListener("click", function(){ scans.pop(); put("hc.scans",scans); renderRecent(); flash("Removed last entry","warn"); });
+      right.appendChild(u);
+    }
+    row.appendChild(left); row.appendChild(right); list.appendChild(row);
+  });
+}
+renderRecent();
+
+/* ---------------- sheets ---------------- */
+function open(id){ document.getElementById(id).classList.remove("hidden"); }
+function close(id){ document.getElementById(id).classList.add("hidden"); refocus(); }
+document.addEventListener("click", function(ev){
+  var b=ev.target.closest("[data-close]"); if(b) close(b.getAttribute("data-close"));
+});
+
+/* ---------------- setup ---------------- */
+function renderSched(){
+  var tb=document.getElementById("schedBody"); tb.innerHTML="";
+  sched.forEach(function(p,i){
+    var tr=document.createElement("tr");
+    tr.innerHTML='<td><input value="'+p.n+'" data-f="n" data-i="'+i+'"></td>'+
+                 '<td><input type="time" value="'+p.s+'" data-f="s" data-i="'+i+'"></td>'+
+                 '<td><input type="time" value="'+p.e+'" data-f="e" data-i="'+i+'"></td>';
+    tb.appendChild(tr);
+  });
+}
+document.getElementById("addRow").addEventListener("click", function(){ sched.push({n:"New",s:"08:00",e:"08:50"}); renderSched(); });
+document.getElementById("saveSched").addEventListener("click", function(){
+  var next=sched.map(function(p){ return {n:p.n,s:p.s,e:p.e}; });
+  document.querySelectorAll("#schedBody input").forEach(function(inp){
+    next[+inp.getAttribute("data-i")][inp.getAttribute("data-f")] = inp.value;
+  });
+  sched=next.filter(function(p){ return p.n && p.s && p.e; });
+  put("hc.sched",sched); renderSched(); tick(); alert("Schedule saved.");
+});
+document.getElementById("saveZones").addEventListener("click", function(){
+  var lines=document.getElementById("zoneEdit").value.split("\n").map(function(s){return s.trim();}).filter(Boolean);
+  if(!lines.length){ alert("Keep at least one location."); return; }
+  zones=lines; put("hc.zones",zones);
+  if(zones.indexOf(zone)<0){ zone=zones[0]; put("hc.zone",zone); paintZone(); }
+  alert("Locations saved.");
+});
+document.getElementById("wipeBtn").addEventListener("click", function(){
+  if(!confirm("Delete every stored scan and sweep on this device?")) return;
+  if(!confirm("Exported already? This cannot be undone.")) return;
+  scans=[]; sweeps=[]; sweep=null;
+  put("hc.scans",scans); put("hc.sweeps",sweeps); put("hc.sweep",null);
+  paintSweep(); renderRecent(); renderCounts(); alert("Cleared.");
+});
+function renderCounts(){
+  document.getElementById("cntScans").textContent=scans.length;
+  document.getElementById("cntSweeps").textContent=sweeps.length+(sweep?" (+1 open)":"");
+  document.getElementById("oldest").textContent = scans.length ? scans[0].date : "none";
+}
+document.getElementById("setupBtn").addEventListener("click", function(){
+  renderSched(); renderCounts();
+  document.getElementById("zoneEdit").value=zones.join("\n");
+  open("setupSheet");
+});
+
+/* ---------------- export ---------------- */
+var SCAN_COLS=["id","date","time","period","window","min_into_period","location","sweep_id","ts"];
+var SWEEP_COLS=["sweep_id","date","period","window","location","start_time","end_time","scan_count"];
+function csvEsc(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function scanCSV(){
+  var out=[SCAN_COLS.join(",")];
+  scans.forEach(function(s){ out.push(SCAN_COLS.map(function(c){ return csvEsc(s[c]); }).join(",")); });
+  return out.join("\n");
+}
+function sweepCSV(){
+  var all=sweeps.concat(sweep?[sweep]:[]);
+  var out=[SWEEP_COLS.join(",")];
+  all.forEach(function(s){
+    out.push([s.id,s.date,s.period,s.window,s.location,s.start_time,s.end_time,s.scan_count].map(csvEsc).join(","));
+  });
+  return out.join("\n");
+}
+function download(name, text){
+  var b=new Blob([text],{type:"text/csv;charset=utf-8"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(b); a.download=name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+document.getElementById("exportBtn").addEventListener("click", function(){
+  document.getElementById("dump").value=scanCSV();
+  open("exportSheet");
+});
+document.getElementById("dlBtn").addEventListener("click", function(){
+  var d=dstr(new Date());
+  download("hall_scans_"+d+".csv", scanCSV());
+  setTimeout(function(){ download("hall_sweeps_"+d+".csv", sweepCSV()); }, 700);
+});
+document.getElementById("copyBtn").addEventListener("click", function(){
+  var t=document.getElementById("dump");
+  t.select(); t.setSelectionRange(0,999999);
+  var done=false;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(scanCSV()).then(function(){ alert("Scan CSV copied."); }, function(){ try{ document.execCommand("copy"); done=true; }catch(e){} if(!done) alert("Copy blocked. Select the text manually."); });
+  } else {
+    try{ document.execCommand("copy"); alert("Scan CSV copied."); }catch(e){ alert("Copy blocked. Select the text manually."); }
+  }
+});
+
+/* ---------------- today sheet ---------------- */
+document.getElementById("statsBtn").addEventListener("click", function(){
+  var today=dstr(new Date());
+  var t=scans.filter(function(s){ return s.date===today; });
+  var byPeriod={}, byWin={first10:0,middle30:0,last10:0,outside:0}, byId={};
+  t.forEach(function(s){
+    byPeriod[s.period]=(byPeriod[s.period]||0)+1;
+    byWin[s.window]=(byWin[s.window]||0)+1;
+    byId[s.id]=(byId[s.id]||0)+1;
+  });
+  var reps=Object.keys(byId).filter(function(k){ return byId[k]>1; })
+    .sort(function(a,b){ return byId[b]-byId[a]; });
+  var h='<div class="stat"><span>Scans today</span><span>'+t.length+'</span></div>'+
+        '<div class="stat"><span>Sweeps closed today</span><span>'+sweeps.filter(function(s){return s.date===today;}).length+'</span></div>'+
+        '<div class="stat"><span>In a 10-10 window</span><span>'+(byWin.first10+byWin.last10)+'</span></div>'+
+        '<div class="stat"><span>Middle 30</span><span>'+byWin.middle30+'</span></div>';
+  h+='<h3>By period</h3>';
+  var pk=Object.keys(byPeriod);
+  h += pk.length ? pk.map(function(p){ return '<div class="stat"><span>'+p+'</span><span>'+byPeriod[p]+'</span></div>'; }).join("")
+                 : '<p class="note">Nothing yet.</p>';
+  h+='<h3>Twice or more today</h3>';
+  h += reps.length ? reps.map(function(k){ return '<div class="stat"><span>'+k+'</span><span>'+byId[k]+'</span></div>'; }).join("")
+                   : '<p class="note">No repeats yet today.</p>';
+  h+='<p class="note">Day counts are a sanity check only. Patterns come from the weekly report.</p>';
+  document.getElementById("statsBody").innerHTML=h;
+  open("statsSheet");
+});
+
+paint();
+
+/* offline cache so the tool launches without wifi */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+})();
+</script>
+</body>
+</html>
