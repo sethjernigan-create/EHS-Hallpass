@@ -1,6 +1,6 @@
 /* Cache only this app's static files. Never cache Cognito forms or requests. */
 const CACHE='hall-camera-v5-staff';
-const FILES=['./','./index.html','./mobile.css','./hall-core.js','./camera.js','./roster-core.js','./roster.js','./auth-client.js','./vendor/zxing-browser.min.js','./manifest.webmanifest','./icon-180.png','./icon-192.png','./icon-512.png'];
+const FILES=['./','./index.html','./mobile.css?v=staff-1','./hall-core.js','./camera.js','./roster-core.js','./roster.js?v=staff-1','./auth-client.js?v=staff-1','./vendor/zxing-browser.min.js','./manifest.webmanifest','./icon-180.png','./icon-192.png','./icon-512.png'];
 const allowed=new Set(FILES.map(p=>new URL(p,self.registration.scope).href));
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>/^hall-(?:v\d|camera-)/.test(k)&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
