@@ -4,19 +4,19 @@ A phone camera app for hallway checks. Built on the existing Hall Capture app an
 
 ## Use on a phone
 
-1. Open the hosted HTTPS app in Safari on iPhone or Chrome on Android. In Setup, import the student roster CSV, verify the bell schedule and locations, and save your staff email. Import the roster once on each phone.
+1. Open the hosted HTTPS app in Safari on iPhone or Chrome on Android. Sign in with an approved school Google account. The shared roster is already available; no CSV download is needed. Verify the bell schedule and locations in Setup.
 2. Tap **Start camera**, allow camera access, and hold the full barcode in view. The app selects a rear camera initially. Camera selection and flashlight controls appear when supported.
 3. Choose **Nurse**, **Bathroom**, **Other class**, **Office**, or **No pass**, then save the hallway log. Manual entry is also available.
-4. **No pass** creates a local referral draft. Add a student name and grade, review the description, and open the linked Cognito form to finish and submit. Choose the appropriate infraction and complete any remaining required fields there. The app never assumes an infraction category or disciplinary consequence.
+4. **No pass** creates a local referral draft. Check the matched student name and grade, review the description, and open the linked Cognito form to finish and submit. Choose the appropriate infraction and complete any remaining required fields there. The app never assumes an infraction category or disciplinary consequence.
 5. Export scans and sweeps separately. All no-pass drafts, including earlier dates, are available under **Today**.
 
-Add the app to the home screen with Safari's Share menu or Chrome's menu. Load it online once so its scanner can be cached. Hallway logging then works offline; Cognito requires connectivity.
+Add the app to the home screen with Safari's Share menu or Chrome's menu. An internet connection is required for staff sign-in, student lookup, and Cognito. Scanner assets can be cached, but private roster responses are never cached.
 
 ## Data and referral behavior
 
-- Records, drafts, staff email, roster, locations, and schedule are stored only in this browser on this phone. There is no cross-device synchronization. Imported rosters provide exact student-ID lookup, including leading zeros.
-- Roster CSV columns are `Student Id`, `First Name`, `Last Name`, and optional `Grade`. The school's supplied header layout is supported. Student email columns are ignored. The CSV is read locally and never uploaded, bundled with the public app, or committed to GitHub. Share the roster directly with authorized staff so they can import it on their phone.
-- On a match, the pass check shows the student's name and grade; those values are saved with the log and prefilled in the no-pass referral. Unknown IDs remain loggable without a guessed identity. Duplicate IDs and missing required data reject the whole import and preserve the prior roster. Removing or replacing a roster does not rewrite historical log names.
+- The student roster is stored in private server-side D1 storage. Every lookup requires a valid staff session and exact allowlisted email. School domain membership alone does not grant access. Hallway records and drafts remain in this browser on this phone; these existing logs are not synchronized.
+- Roster CSV columns are `Student Id`, `First Name`, `Last Name`, and optional `Grade`. The school's supplied header layout is supported. Student email columns are ignored. Only the configured administrator can upload a replacement shared roster in Setup. It is stored privately on the server, never bundled with the public app or committed to GitHub. The prior whole-roster device cache is removed on upgrade.
+- On a match, the pass check shows the student's name and grade; those values are saved with the log and prefilled in the no-pass referral. Unknown IDs remain loggable without a guessed identity. Duplicate IDs and missing required data reject the whole import and preserve the prior roster. Replacing a roster does not rewrite historical log names.
 - Existing `hc.*` storage keys are preserved. A different hosting origin has separate storage; export records from the old address before switching.
 - Scanned IDs remain strings, preserving leading zeros. Print-barcode formats supported by ZXing's 1D reader include Code 128 and Code 39. Camera frames are processed on the phone and are not uploaded.
 - Repeated IDs are blocked for 20 seconds, including nonconsecutive repeats. A scan is logged only after a pass type is selected and the user saves it.
@@ -26,9 +26,15 @@ Add the app to the home screen with Safari's Share menu or Chrome's menu. Load i
 
 ## Build and host
 
-The app is static and has no runtime installation step. Serve the repository files over HTTPS or run `node build.cjs` for a `dist/` copy. `.openai/hosting.json` identifies the private Sites deployment. GitHub Pages can also serve the repository root after an authorized release. Do not publish exported student records in the source repository.
+This app requires a Cloudflare-compatible Worker and D1 database; it cannot run as a static GitHub Pages site. Install the pinned dependencies, generate schema migrations with Drizzle when changing the schema, and run `node build.cjs`. Sites applies the schema-only migrations from `dist/.openai/drizzle` and provides the logical `DB` binding. On Windows hosts that block Node subprocesses, run `node build.cjs --prepare-only`, then invoke the installed esbuild executable directly with `server/worker.mjs --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/server/index.js`.
+
+Configure server environment variables: `GOOGLE_CLIENT_ID`, `APP_ORIGIN` (exact HTTPS app origin), `APPROVED_STAFF_EMAILS` (comma separated exact addresses), and `ADMIN_EMAIL`. Do not put private configuration or student records in source control. Google Identity Services uses a Web Application client with the app origin registered; no client secret is used. Signed Google ID tokens are verified for signature, issuer, audience, expiry, hosted domain, verified email, and one-time nonce. The server issues a 12-hour HttpOnly/Secure/SameSite session and rechecks the allowlist on every protected request. Sessions can be revoked by removing an email and applying the environment update. Same-origin requests and one-time login challenges prevent login CSRF and replay.
+
+An optional initial private import accepts a high-entropy bearer token whose SHA-256 hash is stored in `ROSTER_BOOTSTRAP_HASH`, with a short epoch-seconds deadline in `ROSTER_BOOTSTRAP_EXPIRES`. A database marker atomically prevents repeat initialization. Remove both bootstrap environment variables after initial import. Normal roster updates use the authenticated administrator import. The bootstrap token and roster must never appear in Git, assets, or logs.
 
 The scanner is bundled locally at `vendor/zxing-browser.min.js` (ZXing Browser 0.1.5), with third-party licenses alongside it. Do not replace it with an unpinned CDN reference: offline camera scanning depends on the local asset.
+
+Google verification follows [Google’s server verification guidance](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
 
 ## Validation
 

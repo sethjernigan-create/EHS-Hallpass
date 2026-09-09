@@ -157,6 +157,9 @@
 <link rel="stylesheet" href="mobile.css">
 </head>
 <body>
+<section id="authGate" style="max-width:440px;margin:12vh auto;padding:24px"><span class="eyebrow">ESTEM HIGH SCHOOL</span><h1>Hall Capture</h1><p>Sign in to scan IDs and look up student names.</p><div id="googleSignIn"></div><p id="authMessage" role="status">Loading staff sign-in…</p><button id="authRetry" hidden>Try sign-in again</button></section>
+<div id="appContent" hidden>
+<div class="note" style="padding:12px"><span id="signedInEmail"></span> <button id="signOut">Sign out</button><span id="accountMessage" role="status"></span></div>
 
 <div id="storeWarn" class="warnbar hidden">
   Device storage is unavailable. Entries are temporary. Export them before closing this app.
@@ -261,12 +264,11 @@
 <div id="setupSheet" class="sheet hidden">
   <div class="sheetHead"><h2>Setup</h2><button data-close="setupSheet">Done</button></div>
   <div class="sheetBody">
-    <h3>Student roster</h3>
-    <p id="rosterStatus" class="note">No roster on this phone.</p>
-    <label class="field">Import roster CSV<input id="rosterFile" type="file" accept=".csv,text/csv"></label>
-    <p class="note">Select the student roster file on this phone. Names and grades will appear when IDs are scanned. Import once on each staff phone; the roster stays in this browser and is not uploaded. Student email addresses are not imported.</p>
+    <h3>Shared student roster</h3>
+    <p id="rosterStatus" class="note">Checking shared roster…</p>
+    <p class="note">Student names are looked up privately when you scan. An internet connection is required; staff do not need a CSV on their phone.</p>
+    <div id="rosterAdmin" hidden><label class="field">Update shared roster CSV<input id="rosterFile" type="file" accept=".csv,text/csv"></label><p class="note">Only your administrator account can replace the school roster.</p></div>
     <p id="rosterMessage" class="note" role="status" aria-live="polite"></p>
-    <div class="btnRow"><button id="removeRoster" disabled>Remove roster from this phone</button></div>
     <h3>Bell schedule</h3>
     <table class="sched">
       <thead><tr><th style="width:38%">Period</th><th style="width:31%">Start</th><th style="width:31%">End</th></tr></thead>
@@ -284,8 +286,8 @@
     <p class="note">One per line. Keep the list under six so the tap stays fast.</p>
 
     <h3>Referral details</h3>
-    <label class="field">Your staff email<input type="email" id="staffEmail" autocomplete="email"></label>
-    <div class="btnRow"><button id="saveStaff" class="primary">Save staff email</button></div>
+    <label class="field">Your staff email<input type="email" id="staffEmail" autocomplete="email" readonly></label>
+    <p class="note">New hallway logs use your signed-in staff account.</p>
     <p class="note">Saved on this phone for your Cognito referrals.</p>
     <h3>Data</h3>
     <div class="stat"><span>Scans stored</span><span id="cntScans">0</span></div>
@@ -293,7 +295,7 @@
     <div class="stat"><span>Oldest record</span><span id="oldest">none</span></div>
     <div class="btnRow"><button id="wipeBtn" style="color:var(--warn)">Clear all data</button></div>
     <p class="note">Logs stay in this browser on this phone. They do not sync across devices. Export regularly; clearing browser data removes them.</p>
-<p class="note">For quick access, use Safari → Share → Add to Home Screen on iPhone, or Chrome → menu → Add to Home screen on Android. Open once online before using it offline.</p>
+<p class="note">For quick access, use Safari → Share → Add to Home Screen on iPhone, or Chrome → menu → Add to Home screen on Android. Stay connected for student lookups.</p>
   </div>
 </div>
 
@@ -317,10 +319,12 @@
   <div class="sheetBody" id="statsBody"></div>
 </div>
 
+</div>
 <script src="vendor/zxing-browser.min.js"></script>
 <script src="hall-core.js"></script>
 <script src="roster-core.js"></script>
 <script src="roster.js"></script>
+<script src="auth-client.js" defer></script>
 <script src="camera.js" defer></script>
 <script>
 (function(){
@@ -424,7 +428,7 @@ function commit(id, detail){
     period:p.name, window:p.win, min_into_period:p.into,
     location:detail.location, sweep_id: detail.sweepId,
     pass_type:detail.passType, notes:detail.notes, referral_status:detail.passType==="No pass"?"draft":"",
-    student_first:detail.first||"", student_last:detail.last||"", grade:detail.grade||"", staff_email:get("hc.staffEmail","")
+    student_first:detail.first||"", student_last:detail.last||"", grade:detail.grade||"", staff_email:window.HallAuth.user().email
   };
   scans.push(record);
   put("hc.scans", scans);
@@ -637,12 +641,20 @@ document.getElementById("statsBtn").addEventListener("click", function(){
 });
 
 var pending=null,referralRecord=null;
-function checkPass(value){
+window.addEventListener('hall:auth',function(ev){
+  if(ev.detail){put('hc.staffEmail',ev.detail.email);document.getElementById('staffEmail').value=ev.detail.email;}
+  else{pending=null;referralRecord=null;document.querySelectorAll('.sheet').forEach(s=>s.classList.add('hidden'));}
+});
+var lookingUp=false;
+async function checkPass(value){
+  if(lookingUp||!window.HallAuth?.user())return;
   var id;try{id=HallCore.normalizeId(value);}catch(e){flash(e.message,'warn');return;}
   if(HallCore.duplicate(scans,id,Date.now())){flash('Already logged '+id+' a moment ago','warn');return;}
-  var student=window.HallRoster?.lookup(id);
-  pending={id:id,observedAt:new Date(),location:zone,sweepId:sweep?sweep.id:'',first:student?.first||'',last:student?.last||'',grade:student?.grade||''};
-  document.getElementById('passStudentName').textContent=student?student.first+' '+student.last:(window.HallRoster?.count()?'Student not found in roster':'Import a roster in Setup to show student names');
+  lookingUp=true;window.HallCamera?.stop();var observedAt=new Date(),observedZone=zone,observedSweep=sweep?sweep.id:'';
+  var student;try{student=await window.HallRoster.lookup(id);}catch(e){flash(e.message,'warn');return;}finally{lookingUp=false;}
+  if(!window.HallAuth.user())return;
+  pending={id:id,observedAt:observedAt,location:observedZone,sweepId:observedSweep,first:student?.first||'',last:student?.last||'',grade:student?.grade||''};
+  document.getElementById('passStudentName').textContent=student?student.first+' '+student.last:'Student not found in roster';
   document.getElementById('passStudentGrade').textContent=student?.grade?'Grade '+student.grade:(student?'': 'You can still log this ID.');
   document.getElementById('passForm').reset();document.getElementById('noPassNote').hidden=true;
   document.getElementById('savePass').textContent='Save hallway log';
@@ -661,7 +673,6 @@ document.getElementById('passForm').addEventListener('submit',function(ev){
   pending=null;close('passSheet');document.getElementById('manualEntry').open=false;
   if(record?.pass_type==='No pass')showReferral(record);
 });
-document.getElementById('saveStaff').addEventListener('click',function(){var input=document.getElementById('staffEmail');if(input.reportValidity()){put('hc.staffEmail',input.value.trim());alert('Staff email saved on this phone.');}});
 function showReferral(record){
   referralRecord=record;
   document.querySelector('#referralSheet .savedNote').textContent=storeOK?'Hallway log saved on this phone.':'Storage is unavailable. Export this temporary entry before closing.';
