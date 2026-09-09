@@ -217,6 +217,7 @@
 <div id="passSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="passTitle">
   <div class="sheetHead"><h2 id="passTitle">Check hall pass</h2><button data-close="passSheet">Cancel</button></div>
   <form id="passForm" class="sheetBody">
+    <div id="passStudentName" class="studentName" role="status"></div><p id="passStudentGrade" class="note"></p>
     <div class="eyebrow">STUDENT ID</div><div id="passId" class="studentId"></div><p id="passContext" class="note"></p>
     <fieldset class="passChoices"><legend>Which pass does the student have?</legend>
       <label><input type="radio" name="passType" value="Nurse" required><span>Nurse</span></label>
@@ -260,6 +261,12 @@
 <div id="setupSheet" class="sheet hidden">
   <div class="sheetHead"><h2>Setup</h2><button data-close="setupSheet">Done</button></div>
   <div class="sheetBody">
+    <h3>Student roster</h3>
+    <p id="rosterStatus" class="note">No roster on this phone.</p>
+    <label class="field">Import roster CSV<input id="rosterFile" type="file" accept=".csv,text/csv"></label>
+    <p class="note">Select the student roster file on this phone. Names and grades will appear when IDs are scanned. Import once on each staff phone; the roster stays in this browser and is not uploaded. Student email addresses are not imported.</p>
+    <p id="rosterMessage" class="note" role="status" aria-live="polite"></p>
+    <div class="btnRow"><button id="removeRoster" disabled>Remove roster from this phone</button></div>
     <h3>Bell schedule</h3>
     <table class="sched">
       <thead><tr><th style="width:38%">Period</th><th style="width:31%">Start</th><th style="width:31%">End</th></tr></thead>
@@ -312,6 +319,8 @@
 
 <script src="vendor/zxing-browser.min.js"></script>
 <script src="hall-core.js"></script>
+<script src="roster-core.js"></script>
+<script src="roster.js"></script>
 <script src="camera.js" defer></script>
 <script>
 (function(){
@@ -483,7 +492,7 @@ function renderRecent(){
   if(!recent.length){ list.innerHTML='<div class="rec" style="color:#5A6674">Nothing logged yet.</div>'; return; }
   recent.forEach(function(s,i){
     var row=document.createElement("div"); row.className="rec";
-    var left=document.createElement("div"); left.className="rid"; left.textContent=s.id;
+    var left=document.createElement("div"); left.className="rid"; var savedName=[s.student_first,s.student_last].filter(Boolean).join(' ');left.textContent=savedName?savedName+' · '+s.id:s.id;
     var right=document.createElement("div"); right.style.display="flex"; right.style.alignItems="center";
     var meta=document.createElement("div"); meta.className="rmeta";
     meta.textContent = s.time.slice(0,5)+" · "+s.period+" · "+(s.pass_type||"Legacy log");
@@ -631,7 +640,10 @@ var pending=null,referralRecord=null;
 function checkPass(value){
   var id;try{id=HallCore.normalizeId(value);}catch(e){flash(e.message,'warn');return;}
   if(HallCore.duplicate(scans,id,Date.now())){flash('Already logged '+id+' a moment ago','warn');return;}
-  pending={id:id,observedAt:new Date(),location:zone,sweepId:sweep?sweep.id:''};
+  var student=window.HallRoster?.lookup(id);
+  pending={id:id,observedAt:new Date(),location:zone,sweepId:sweep?sweep.id:'',first:student?.first||'',last:student?.last||'',grade:student?.grade||''};
+  document.getElementById('passStudentName').textContent=student?student.first+' '+student.last:(window.HallRoster?.count()?'Student not found in roster':'Import a roster in Setup to show student names');
+  document.getElementById('passStudentGrade').textContent=student?.grade?'Grade '+student.grade:(student?'': 'You can still log this ID.');
   document.getElementById('passForm').reset();document.getElementById('noPassNote').hidden=true;
   document.getElementById('savePass').textContent='Save hallway log';
   document.getElementById('passId').textContent=id;

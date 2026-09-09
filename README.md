@@ -4,7 +4,7 @@ A phone camera app for hallway checks. Built on the existing Hall Capture app an
 
 ## Use on a phone
 
-1. Open the hosted HTTPS app in Safari on iPhone or Chrome on Android. In Setup, verify the bell schedule and locations and save your staff email.
+1. Open the hosted HTTPS app in Safari on iPhone or Chrome on Android. In Setup, import the student roster CSV, verify the bell schedule and locations, and save your staff email. Import the roster once on each phone.
 2. Tap **Start camera**, allow camera access, and hold the full barcode in view. The app selects a rear camera initially. Camera selection and flashlight controls appear when supported.
 3. Choose **Nurse**, **Bathroom**, **Other class**, **Office**, or **No pass**, then save the hallway log. Manual entry is also available.
 4. **No pass** creates a local referral draft. Add a student name and grade, review the description, and open the linked Cognito form to finish and submit. Choose the appropriate infraction and complete any remaining required fields there. The app never assumes an infraction category or disciplinary consequence.
@@ -14,7 +14,9 @@ Add the app to the home screen with Safari's Share menu or Chrome's menu. Load i
 
 ## Data and referral behavior
 
-- Records, drafts, staff email, locations, and schedule are stored only in this browser on this phone. There is no cross-device synchronization or roster lookup.
+- Records, drafts, staff email, roster, locations, and schedule are stored only in this browser on this phone. There is no cross-device synchronization. Imported rosters provide exact student-ID lookup, including leading zeros.
+- Roster CSV columns are `Student Id`, `First Name`, `Last Name`, and optional `Grade`. The school's supplied header layout is supported. Student email columns are ignored. The CSV is read locally and never uploaded, bundled with the public app, or committed to GitHub. Share the roster directly with authorized staff so they can import it on their phone.
+- On a match, the pass check shows the student's name and grade; those values are saved with the log and prefilled in the no-pass referral. Unknown IDs remain loggable without a guessed identity. Duplicate IDs and missing required data reject the whole import and preserve the prior roster. Removing or replacing a roster does not rewrite historical log names.
 - Existing `hc.*` storage keys are preserved. A different hosting origin has separate storage; export records from the old address before switching.
 - Scanned IDs remain strings, preserving leading zeros. Print-barcode formats supported by ZXing's 1D reader include Code 128 and Code 39. Camera frames are processed on the phone and are not uploaded.
 - Repeated IDs are blocked for 20 seconds, including nonconsecutive repeats. A scan is logged only after a pass type is selected and the user saves it.

@@ -1,4 +1,5 @@
 :root{color-scheme:dark;--dim:#a8b4c6}
+.studentName{font-size:clamp(24px,6vw,34px);font-weight:800;line-height:1.2;overflow-wrap:anywhere;margin:12px 0 4px}#passStudentGrade{margin:6px 0 20px}#rosterFile{max-width:100%;white-space:normal}#rosterMessage{color:var(--gold)}
 body{height:auto;min-height:100dvh;max-width:760px;margin:0 auto}
 button,a,input,select,summary{touch-action:manipulation}button{cursor:pointer;min-height:44px}button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 .brand{display:flex;justify-content:space-between;align-items:center;padding:20px 18px 18px;border-bottom:3px solid var(--gold);gap:16px}.brand h1{margin:4px 0 0;font-size:26px;letter-spacing:-.6px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:1.4px;color:var(--gold)}#connection{font-size:12px;color:var(--dim);text-align:right}
