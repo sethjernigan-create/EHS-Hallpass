@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Hall Capture</title>
+<title>EHS Hall Capture</title>
+<meta name="description" content="Scan a student ID with your phone camera, record a hall pass, and prepare a no-pass referral.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="Hall Capture">
@@ -153,13 +154,18 @@
   .stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
   .stat span:last-child{font-weight:700;font-variant-numeric:tabular-nums}
 </style>
+<link rel="stylesheet" href="mobile.css">
 </head>
 <body>
+<section id="authGate" style="max-width:440px;margin:12vh auto;padding:24px"><span class="eyebrow">ESTEM HIGH SCHOOL</span><h1>Hall Capture</h1><p>Sign in to scan IDs and look up student names.</p><div id="googleSignIn"></div><p id="authMessage" role="status">Loading staff sign-in…</p><button id="authRetry" hidden>Try sign-in again</button></section>
+<div id="appContent" hidden>
+<div class="note" style="padding:12px"><span id="signedInEmail"></span> <button id="signOut">Sign out</button><span id="accountMessage" role="status"></span></div>
 
 <div id="storeWarn" class="warnbar hidden">
-  Storage is blocked here, so nothing will be saved. Download this file and open it in Safari or Chrome.
+  Device storage is unavailable. Entries are temporary. Export them before closing this app.
 </div>
 
+<header class="brand"><div><span class="eyebrow">ESTEM HIGH SCHOOL</span><h1>Hall Capture</h1></div><span id="connection">On this phone</span></header>
 <div id="strip">
   <div id="periodBox">
     <div id="periodName">Loading</div>
@@ -174,18 +180,27 @@
 </div>
 
 <div id="hero">
+  <section class="camera" aria-label="Student ID camera scanner">
+    <div class="cameraView"><video id="cameraVideo" muted playsinline autoplay></video><div class="scanGuide" aria-hidden="true"></div><span class="cameraHint">STUDENT ID BARCODE</span></div>
+    <p id="cameraStatus" role="status">Use your phone camera to scan the barcode on the ID.</p>
+    <div class="cameraActions"><button id="cameraStart" class="primary">Start camera</button><button id="cameraStop" hidden>Stop camera</button><button id="cameraTorch" aria-pressed="false" hidden>Flashlight</button></div>
+    <select id="cameraSelect" aria-label="Camera" hidden></select>
+  </section>
+  <details id="manualEntry"><summary>Enter ID manually</summary>
   <div id="idWrap">
-    <div id="idDisplay" class="empty">Scan or key student ID</div>
-    <input id="wedge" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Scanner input">
+    <div id="idDisplay" class="empty">Student ID</div>
+    <input id="wedge" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Student ID" maxlength="64" placeholder="Student ID">
   </div>
-  <div id="flash"></div>
+  <div id="flash" role="status" aria-live="polite"></div>
   <div id="pad">
     <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
     <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
     <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
     <button class="fn" data-k="clear">Clear</button><button data-k="0">0</button><button class="fn" data-k="del">Back</button>
   </div>
-  <button id="logBtn" disabled>Log</button>
+  <button id="logBtn" disabled>Check pass</button>
+</details>
+<div id="mainStatus" role="status" aria-live="polite"></div>
 </div>
 
 <div id="recentWrap">
@@ -202,6 +217,40 @@
   <button id="setupBtn">Setup</button>
 </div>
 
+<div id="passSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="passTitle">
+  <div class="sheetHead"><h2 id="passTitle">Check hall pass</h2><button data-close="passSheet">Cancel</button></div>
+  <form id="passForm" class="sheetBody">
+    <div id="passStudentName" class="studentName" role="status"></div><p id="passStudentGrade" class="note"></p>
+    <div class="eyebrow">STUDENT ID</div><div id="passId" class="studentId"></div><p id="passContext" class="note"></p>
+    <fieldset class="passChoices"><legend>Which pass does the student have?</legend>
+      <label><input type="radio" name="passType" value="Nurse" required><span>Nurse</span></label>
+      <label><input type="radio" name="passType" value="Bathroom"><span>Bathroom</span></label>
+      <label><input type="radio" name="passType" value="Other class"><span>Other class</span></label>
+      <label><input type="radio" name="passType" value="Office"><span>Office</span></label>
+      <label class="noPass"><input type="radio" name="passType" value="No pass"><span>No pass</span></label>
+    </fieldset>
+    <p id="noPassNote" class="note" hidden>A referral draft will be prepared after saving. You can add the student’s name and grade before opening Cognito.</p>
+    <label class="field">Notes <span class="note">(optional)</span><textarea id="passNotes" rows="3" maxlength="1000" placeholder="Add observed details"></textarea></label>
+    <button class="wide primary" type="submit" id="savePass">Save hallway log</button>
+  </form>
+</div>
+<div id="referralSheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="referralTitle">
+  <div class="sheetHead"><h2 id="referralTitle">No-pass referral</h2><button data-close="referralSheet">Done</button></div>
+  <div class="sheetBody">
+    <p class="savedNote">Hallway log saved on this phone.</p>
+    <p class="note">Review the draft, then open Cognito to finish and submit the referral. Opening the form does not submit it.</p>
+    <form id="referralForm">
+      <div class="nameRow"><label class="field">Student first name<input id="refFirst" autocomplete="off"></label><label class="field">Student last name<input id="refLast" autocomplete="off"></label></div>
+      <label class="field">Grade<select id="refGrade"><option value="">Choose grade in Cognito</option><option>9</option><option>10</option><option>11</option><option>12</option></select></label>
+      <label class="field">Staff email<input id="refEmail" type="email" autocomplete="email"></label>
+      <label class="field">Referral description<textarea id="refText" rows="6" maxlength="2500"></textarea></label>
+      <button class="wide primary" type="submit">Open referral in Cognito</button>
+    </form>
+    <div class="btnRow"><button id="copyReferral">Copy description</button><button id="saveReferral">Save draft</button></div>
+    <p id="referralMessage" class="note" role="status"></p>
+  </div>
+</div>
+
 <!-- Zone sheet -->
 <div id="zoneSheet" class="sheet hidden">
   <div class="sheetHead"><h2>Location</h2><button data-close="zoneSheet">Done</button></div>
@@ -215,6 +264,11 @@
 <div id="setupSheet" class="sheet hidden">
   <div class="sheetHead"><h2>Setup</h2><button data-close="setupSheet">Done</button></div>
   <div class="sheetBody">
+    <h3>Shared student roster</h3>
+    <p id="rosterStatus" class="note">Checking shared roster…</p>
+    <p class="note">Student names are looked up privately when you scan. An internet connection is required; staff do not need a CSV on their phone.</p>
+    <div id="rosterAdmin" hidden><label class="field">Update shared roster CSV<input id="rosterFile" type="file" accept=".csv,text/csv"></label><p class="note">Only your administrator account can replace the school roster.</p></div>
+    <p id="rosterMessage" class="note" role="status" aria-live="polite"></p>
     <h3>Bell schedule</h3>
     <table class="sched">
       <thead><tr><th style="width:38%">Period</th><th style="width:31%">Start</th><th style="width:31%">End</th></tr></thead>
@@ -231,12 +285,17 @@
     <div class="btnRow"><button id="saveZones" class="primary">Save locations</button></div>
     <p class="note">One per line. Keep the list under six so the tap stays fast.</p>
 
+    <h3>Referral details</h3>
+    <label class="field">Your staff email<input type="email" id="staffEmail" autocomplete="email" readonly></label>
+    <p class="note">New hallway logs use your signed-in staff account.</p>
+    <p class="note">Saved on this phone for your Cognito referrals.</p>
     <h3>Data</h3>
     <div class="stat"><span>Scans stored</span><span id="cntScans">0</span></div>
     <div class="stat"><span>Sweeps stored</span><span id="cntSweeps">0</span></div>
     <div class="stat"><span>Oldest record</span><span id="oldest">none</span></div>
     <div class="btnRow"><button id="wipeBtn" style="color:var(--warn)">Clear all data</button></div>
-    <p class="note">Export first. Clearing cannot be undone.</p>
+    <p class="note">Logs stay in this browser on this phone. They do not sync across devices. Export regularly; clearing browser data removes them.</p>
+<p class="note">For quick access, use Safari → Share → Add to Home Screen on iPhone, or Chrome → menu → Add to Home screen on Android. Stay connected for student lookups.</p>
   </div>
 </div>
 
@@ -245,10 +304,10 @@
   <div class="sheetHead"><h2>Export</h2><button data-close="exportSheet">Done</button></div>
   <div class="sheetBody">
     <div class="btnRow" style="margin-top:0">
-      <button id="dlBtn" class="primary">Download CSV</button>
+      <button id="dlBtn" class="primary">Download scans</button><button id="dlSweeps">Download sweeps</button>
       <button id="copyBtn">Copy CSV</button>
     </div>
-    <p class="note">Two files download: scans and sweeps. Send both to Seth. Copy puts the scan file on the clipboard if downloads are blocked.</p>
+    <p class="note">Download each file separately. Copy CSV copies the scan log when downloads are unavailable.</p>
     <h3>Preview</h3>
     <textarea id="dump" readonly></textarea>
   </div>
@@ -260,6 +319,13 @@
   <div class="sheetBody" id="statsBody"></div>
 </div>
 
+</div>
+<script src="vendor/zxing-browser.min.js"></script>
+<script src="hall-core.js"></script>
+<script src="roster-core.js"></script>
+<script src="roster.js"></script>
+<script src="auth-client.js" defer></script>
+<script src="camera.js" defer></script>
 <script>
 (function(){
 "use strict";
@@ -271,7 +337,7 @@ try { localStorage.setItem("hc.test","1"); localStorage.removeItem("hc.test"); }
 catch(e){ storeOK = false; document.getElementById("storeWarn").classList.remove("hidden"); }
 
 function put(k,v){ var s=JSON.stringify(v); if(storeOK){ try{ localStorage.setItem(k,s); return; }catch(e){ storeOK=false; document.getElementById("storeWarn").classList.remove("hidden"); } } mem[k]=s; }
-function get(k,d){ var s = storeOK ? localStorage.getItem(k) : mem[k]; if(s==null) s=mem[k]; if(s==null) return d; try{ return JSON.parse(s); }catch(e){ return d; } }
+function get(k,d){ var s=mem[k];if(s==null){try{s=localStorage.getItem(k);}catch(e){}}if(s==null)return d;try{return JSON.parse(s);}catch(e){return d;} }
 
 var DEFAULT_SCHED = [
   {n:"1st",s:"08:15",e:"09:05"},
@@ -293,6 +359,7 @@ var sweeps = get("hc.sweeps", []);
 var sweep  = get("hc.sweep", null);
 
 /* ---------------- helpers ---------------- */
+function escapeHTML(v){return String(v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#39;"}[c];});}
 function pad2(n){ return (n<10?"0":"")+n; }
 function toMin(hhmm){ var p=String(hhmm).split(":"); return (+p[0])*60 + (+p[1]); }
 function dstr(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
@@ -329,7 +396,7 @@ tick(); setInterval(tick, 5000);
 /* ---------------- entry ---------------- */
 var buf="", elId=document.getElementById("idDisplay"), elFlash=document.getElementById("flash"), elLog=document.getElementById("logBtn");
 function paint(){
-  if(buf===""){ elId.textContent="Scan or key student ID"; elId.className="empty"; elLog.disabled=true; }
+  if(buf===""){ elId.textContent="Student ID"; elId.className="empty"; elLog.disabled=true; }
   else { elId.textContent=buf; elId.className="armed"; elLog.disabled=false; }
 }
 function key(k){
@@ -346,41 +413,39 @@ document.getElementById("pad").addEventListener("click", function(ev){
   if(navigator.vibrate) navigator.vibrate(8);
 });
 
-function flash(msg, kind){ elFlash.textContent=msg; elFlash.className=kind||""; }
+function flash(msg, kind){ elFlash.textContent=msg; elFlash.className=kind||""; document.getElementById("mainStatus").textContent=msg; }
 
-function commit(id){
-  id = String(id).replace(/\s+/g,"");
+function commit(id, detail){
+  id = HallCore.normalizeId(id);
   if(!id){ return; }
-  var d=new Date(), p=periodAt(d);
-  var last = scans.length ? scans[scans.length-1] : null;
-  if(last && last.id===id && (Date.now()-Date.parse(last.ts))<20000){
+  var d=detail.observedAt, p=periodAt(d);
+  if(HallCore.duplicate(scans,id,Date.now())){
     buf=""; if(wedge) wedge.value=""; paint();
     flash("Already logged "+id+" a moment ago","warn"); return;
   }
-  scans.push({
+  var record={
     id:id, ts:d.toISOString(), date:dstr(d), time:tstr(d),
     period:p.name, window:p.win, min_into_period:p.into,
-    location:zone, sweep_id: sweep ? sweep.id : ""
-  });
+    location:detail.location, sweep_id: detail.sweepId,
+    pass_type:detail.passType, notes:detail.notes, referral_status:detail.passType==="No pass"?"draft":"",
+    student_first:detail.first||"", student_last:detail.last||"", grade:detail.grade||"", staff_email:window.HallAuth.user().email
+  };
+  scans.push(record);
   put("hc.scans", scans);
   buf=""; if(wedge) wedge.value=""; paint();
-  flash("Logged "+id+"  ·  "+clock(d), "ok");
+  flash((storeOK?"Logged ":"Temporary entry — export before closing: ")+id+" · "+detail.passType+" · "+clock(d), storeOK?"ok":"warn");
   if(navigator.vibrate) navigator.vibrate([12,40,12]);
-  renderRecent();
+  renderRecent(); return record;
 }
-elLog.addEventListener("click", function(){ commit(buf); });
+elLog.addEventListener("click", function(){ checkPass(wedge.value||buf); });
 
-/* barcode wedge: keeps a hidden input focused so a Bluetooth scanner types straight in */
+/* Manual input and optional keyboard scanners use the same pass check. */
 var wedge=document.getElementById("wedge");
-function refocus(){ try{ wedge.focus({preventScroll:true}); }catch(e){} }
-refocus();
+function refocus(){}
 function anySheetOpen(){ return !!document.querySelector(".sheet:not(.hidden)"); }
-document.addEventListener("click", function(ev){ if(anySheetOpen()) return; if(!ev.target.closest(".sheet")) setTimeout(refocus,0); });
-wedge.addEventListener("keydown", function(ev){
-  if(ev.key==="Enter"){ ev.preventDefault(); var v=wedge.value||buf; wedge.value=""; commit(v); return; }
-  if(/^[0-9]$/.test(ev.key)){ /* let it land in the wedge, mirror to display */ setTimeout(function(){ buf=wedge.value.replace(/\D/g,"").slice(0,12); paint(); },0); }
-});
-wedge.addEventListener("blur", function(){ if(anySheetOpen()) return; setTimeout(refocus, 300); });
+wedge.addEventListener('input',function(){buf=wedge.value;paint();});
+wedge.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();checkPass(wedge.value||buf);}});
+window.addEventListener('hall:id',function(ev){checkPass(ev.detail);});
 
 /* ---------------- sweep ---------------- */
 var sweepBtn=document.getElementById("sweepBtn"), sweepLabel=document.getElementById("sweepLabel");
@@ -431,10 +496,11 @@ function renderRecent(){
   if(!recent.length){ list.innerHTML='<div class="rec" style="color:#5A6674">Nothing logged yet.</div>'; return; }
   recent.forEach(function(s,i){
     var row=document.createElement("div"); row.className="rec";
-    var left=document.createElement("div"); left.className="rid"; left.textContent=s.id;
+    var left=document.createElement("div"); left.className="rid"; var savedName=[s.student_first,s.student_last].filter(Boolean).join(' ');left.textContent=savedName?savedName+' · '+s.id:s.id;
     var right=document.createElement("div"); right.style.display="flex"; right.style.alignItems="center";
     var meta=document.createElement("div"); meta.className="rmeta";
-    meta.innerHTML = s.time.slice(0,5)+"<br>"+(s.period)+" · "+LABEL[s.window].toLowerCase();
+    meta.textContent = s.time.slice(0,5)+" · "+s.period+" · "+(s.pass_type||"Legacy log");
+    if(s.pass_type==="No pass"){var ref=document.createElement("button");ref.className="referralLink";ref.textContent="Referral";ref.addEventListener("click",function(){showReferral(s);});left.appendChild(ref);}
     right.appendChild(meta);
     if(i===0){
       var u=document.createElement("button"); u.className="undo"; u.textContent="Undo";
@@ -447,8 +513,9 @@ function renderRecent(){
 renderRecent();
 
 /* ---------------- sheets ---------------- */
-function open(id){ document.getElementById(id).classList.remove("hidden"); }
-function close(id){ document.getElementById(id).classList.add("hidden"); refocus(); }
+var returnFocus=null;
+function open(id){ if(window.HallCamera)HallCamera.stop();returnFocus=document.activeElement;document.querySelectorAll('.sheet').forEach(s=>s.classList.add('hidden'));var sheet=document.getElementById(id);sheet.classList.remove("hidden");sheet.setAttribute('role','dialog');sheet.setAttribute('aria-modal','true');sheet.querySelector("button,input,select,textarea")?.focus(); }
+function close(id){ document.getElementById(id).classList.add("hidden");if(returnFocus?.isConnected)returnFocus.focus(); }
 document.addEventListener("click", function(ev){
   var b=ev.target.closest("[data-close]"); if(b) close(b.getAttribute("data-close"));
 });
@@ -458,9 +525,9 @@ function renderSched(){
   var tb=document.getElementById("schedBody"); tb.innerHTML="";
   sched.forEach(function(p,i){
     var tr=document.createElement("tr");
-    tr.innerHTML='<td><input value="'+p.n+'" data-f="n" data-i="'+i+'"></td>'+
-                 '<td><input type="time" value="'+p.s+'" data-f="s" data-i="'+i+'"></td>'+
-                 '<td><input type="time" value="'+p.e+'" data-f="e" data-i="'+i+'"></td>';
+    tr.innerHTML='<td><input value="'+escapeHTML(p.n)+'" data-f="n" data-i="'+i+'"></td>'+
+                 '<td><input type="time" value="'+escapeHTML(p.s)+'" data-f="s" data-i="'+i+'"></td>'+
+                 '<td><input type="time" value="'+escapeHTML(p.e)+'" data-f="e" data-i="'+i+'"></td>';
     tb.appendChild(tr);
   });
 }
@@ -493,15 +560,15 @@ function renderCounts(){
   document.getElementById("oldest").textContent = scans.length ? scans[0].date : "none";
 }
 document.getElementById("setupBtn").addEventListener("click", function(){
-  renderSched(); renderCounts();
+  renderSched(); renderCounts(); document.getElementById("staffEmail").value=get("hc.staffEmail","");
   document.getElementById("zoneEdit").value=zones.join("\n");
   open("setupSheet");
 });
 
 /* ---------------- export ---------------- */
-var SCAN_COLS=["id","date","time","period","window","min_into_period","location","sweep_id","ts"];
+var SCAN_COLS=["id","date","time","period","window","min_into_period","location","sweep_id","ts","pass_type","notes","referral_status","student_first","student_last","grade","staff_email","referral_text"];
 var SWEEP_COLS=["sweep_id","date","period","window","location","start_time","end_time","scan_count"];
-function csvEsc(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+var csvEsc=HallCore.csvEscape;
 function scanCSV(){
   var out=[SCAN_COLS.join(",")];
   scans.forEach(function(s){ out.push(SCAN_COLS.map(function(c){ return csvEsc(s[c]); }).join(",")); });
@@ -511,7 +578,7 @@ function sweepCSV(){
   var all=sweeps.concat(sweep?[sweep]:[]);
   var out=[SWEEP_COLS.join(",")];
   all.forEach(function(s){
-    out.push([s.id,s.date,s.period,s.window,s.location,s.start_time,s.end_time,s.scan_count].map(csvEsc).join(","));
+    out.push([s.id,s.date,s.period,s.window,s.location,s.start_time,s.end_time,scans.filter(function(r){return r.sweep_id===s.id;}).length].map(csvEsc).join(","));
   });
   return out.join("\n");
 }
@@ -529,8 +596,9 @@ document.getElementById("exportBtn").addEventListener("click", function(){
 document.getElementById("dlBtn").addEventListener("click", function(){
   var d=dstr(new Date());
   download("hall_scans_"+d+".csv", scanCSV());
-  setTimeout(function(){ download("hall_sweeps_"+d+".csv", sweepCSV()); }, 700);
+
 });
+document.getElementById("dlSweeps").addEventListener("click",function(){download("hall_sweeps_"+dstr(new Date())+".csv",sweepCSV());});
 document.getElementById("copyBtn").addEventListener("click", function(){
   var t=document.getElementById("dump");
   t.select(); t.setSelectionRange(0,999999);
@@ -560,14 +628,88 @@ document.getElementById("statsBtn").addEventListener("click", function(){
         '<div class="stat"><span>Middle 30</span><span>'+byWin.middle30+'</span></div>';
   h+='<h3>By period</h3>';
   var pk=Object.keys(byPeriod);
-  h += pk.length ? pk.map(function(p){ return '<div class="stat"><span>'+p+'</span><span>'+byPeriod[p]+'</span></div>'; }).join("")
+  h += pk.length ? pk.map(function(p){ return '<div class="stat"><span>'+escapeHTML(p)+'</span><span>'+byPeriod[p]+'</span></div>'; }).join("")
                  : '<p class="note">Nothing yet.</p>';
   h+='<h3>Twice or more today</h3>';
-  h += reps.length ? reps.map(function(k){ return '<div class="stat"><span>'+k+'</span><span>'+byId[k]+'</span></div>'; }).join("")
+  h += reps.length ? reps.map(function(k){ return '<div class="stat"><span>'+escapeHTML(k)+'</span><span>'+byId[k]+'</span></div>'; }).join("")
                    : '<p class="note">No repeats yet today.</p>';
   h+='<p class="note">Day counts are a sanity check only. Patterns come from the weekly report.</p>';
   document.getElementById("statsBody").innerHTML=h;
+  var referrals=scans.filter(s=>s.pass_type==='No pass').reverse();
+  if(referrals.length){var title=document.createElement('h3');title.textContent='No-pass referrals · all dates';document.getElementById('statsBody').appendChild(title);referrals.forEach(function(s){var b=document.createElement('button');b.className='zoneOpt';b.textContent=s.id+' · '+s.date+' · '+s.time.slice(0,5)+' · '+(s.referral_status==='opened'?'Opened in Cognito':'Draft');b.addEventListener('click',function(){showReferral(s);});document.getElementById('statsBody').appendChild(b);});}
   open("statsSheet");
+});
+
+var pending=null,referralRecord=null;
+window.addEventListener('hall:auth',function(ev){
+  if(ev.detail){put('hc.staffEmail',ev.detail.email);document.getElementById('staffEmail').value=ev.detail.email;}
+  else{pending=null;referralRecord=null;document.querySelectorAll('.sheet').forEach(s=>s.classList.add('hidden'));}
+});
+var lookingUp=false;
+async function checkPass(value){
+  if(lookingUp||!window.HallAuth?.user())return;
+  var id;try{id=HallCore.normalizeId(value);}catch(e){flash(e.message,'warn');return;}
+  if(HallCore.duplicate(scans,id,Date.now())){flash('Already logged '+id+' a moment ago','warn');return;}
+  lookingUp=true;window.HallCamera?.stop();var observedAt=new Date(),observedZone=zone,observedSweep=sweep?sweep.id:'';
+  var student;try{student=await window.HallRoster.lookup(id);}catch(e){flash(e.message,'warn');return;}finally{lookingUp=false;}
+  if(!window.HallAuth.user())return;
+  pending={id:id,observedAt:observedAt,location:observedZone,sweepId:observedSweep,first:student?.first||'',last:student?.last||'',grade:student?.grade||''};
+  document.getElementById('passStudentName').textContent=student?student.first+' '+student.last:'Student not found in roster';
+  document.getElementById('passStudentGrade').textContent=student?.grade?'Grade '+student.grade:(student?'': 'You can still log this ID.');
+  document.getElementById('passForm').reset();document.getElementById('noPassNote').hidden=true;
+  document.getElementById('savePass').textContent='Save hallway log';
+  document.getElementById('passId').textContent=id;
+  document.getElementById('passContext').textContent=zone+' · '+clock(pending.observedAt);
+  open('passSheet');
+}
+document.getElementById('passForm').addEventListener('change',function(){
+  var no=this.elements.passType.value==='No pass';document.getElementById('noPassNote').hidden=!no;
+  document.getElementById('savePass').textContent=no?'Save log & prepare referral':'Save hallway log';
+});
+document.getElementById('passForm').addEventListener('submit',function(ev){
+  ev.preventDefault();if(!pending)return;
+  var type=this.elements.passType.value;if(!HallCore.PASS_TYPES.includes(type))return;
+  var record=commit(pending.id,Object.assign({},pending,{passType:type,notes:document.getElementById('passNotes').value.trim()}));
+  pending=null;close('passSheet');document.getElementById('manualEntry').open=false;
+  if(record?.pass_type==='No pass')showReferral(record);
+});
+function showReferral(record){
+  referralRecord=record;
+  document.querySelector('#referralSheet .savedNote').textContent=storeOK?'Hallway log saved on this phone.':'Storage is unavailable. Export this temporary entry before closing.';
+  document.getElementById('refFirst').value=record.student_first||'';
+  document.getElementById('refLast').value=record.student_last||'';
+  document.getElementById('refGrade').value=record.grade||'';
+  document.getElementById('refEmail').value=record.staff_email||get('hc.staffEmail','');
+  document.getElementById('refText').value=record.referral_text||HallCore.narrative(record);
+  document.getElementById('referralMessage').textContent=record.referral_status==='opened'?'Previously opened in Cognito. Check Cognito before submitting again.':'Draft saved locally. Internet is needed to open Cognito.';
+  open('referralSheet');
+}
+function saveReferralDraft(){
+  if(!referralRecord)return;
+  referralRecord.student_first=document.getElementById('refFirst').value.trim();
+  referralRecord.student_last=document.getElementById('refLast').value.trim();
+  referralRecord.grade=document.getElementById('refGrade').value;
+  referralRecord.staff_email=document.getElementById('refEmail').value.trim();
+  referralRecord.referral_text=document.getElementById('refText').value.trim();
+  put('hc.scans',scans);put('hc.staffEmail',referralRecord.staff_email);
+}
+document.getElementById('saveReferral').addEventListener('click',function(){saveReferralDraft();document.getElementById('referralMessage').textContent='Draft saved on this phone.';});
+document.querySelector('[data-close="referralSheet"]').addEventListener('click',saveReferralDraft);
+document.getElementById('copyReferral').addEventListener('click',async function(){
+  saveReferralDraft();try{await navigator.clipboard.writeText(document.getElementById('refText').value);document.getElementById('referralMessage').textContent='Description copied.';}catch(e){document.getElementById('refText').select();document.getElementById('referralMessage').textContent='Select and copy the description.';}
+});
+document.getElementById('referralForm').addEventListener('submit',function(ev){
+  ev.preventDefault();saveReferralDraft();if(!referralRecord)return;
+  if(!navigator.onLine){document.getElementById('referralMessage').textContent='You are offline. Draft saved. Reopen this referral when connected.';return;}
+  var url=HallCore.referralUrl(referralRecord);
+  referralRecord.referral_status='opened';put('hc.scans',scans);
+  window.open(url,'_blank','noopener,noreferrer');
+  document.getElementById('referralMessage').textContent='Opened in Cognito for review. If no tab opened, allow pop-ups and tap again. This app cannot confirm submission.';
+});
+document.addEventListener('keydown',function(ev){
+  var sheet=document.querySelector('.sheet:not(.hidden)');if(!sheet)return;
+  if(ev.key==='Escape'){if(sheet.id==='referralSheet')saveReferralDraft();close(sheet.id);}
+  if(ev.key==='Tab'){var els=Array.from(sheet.querySelectorAll('button,input,select,textarea,a[href]')).filter(e=>!e.disabled&&e.getClientRects().length);if(!els.length)return;var first=els[0],last=els[els.length-1];if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}}
 });
 
 paint();
